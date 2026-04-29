@@ -24,10 +24,9 @@ Thumbs.db
 .DS_Store
 
 # ── Generated retrieval caches ─────────────────
-# Note: by user choice we DO commit output/ (KG, qa, results) so the repo
-# can be cloned & queried without re-indexing. The dense_mat_*.npy cache is
-# regenerable but kept for convenience.
-
+# Note: by user choice we DO commit output/ (KG, qa, results, caches) so the
+# repo can be cloned & queried without re-indexing. dense_mat_*.npy and
+# tfidf_vectorizer.pkl are regenerable but kept for convenience.
 # ── Dev / debug scratch ────────────────────────
 scripts/dev/
 *-Kx_NB*
