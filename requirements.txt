@@ -1,0 +1,30 @@
+# Core
+openai>=1.30.0
+neo4j>=5.19.0
+pythainlp>=5.0.0
+
+# GraphRAG / Graph
+networkx>=3.2
+python-louvain>=0.16
+graspologic>=3.3.0
+
+# Embeddings & Vector
+numpy>=1.26.0
+scikit-learn>=1.4.0
+
+# Data
+pandas>=2.1.0
+pyarrow>=15.0.0
+
+# Web UI
+streamlit>=1.35.0
+pyvis>=0.3.2
+
+# Evaluation
+ragas>=0.1.10
+
+# Utilities
+tiktoken>=0.7.0
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+pydantic>=2.5.0

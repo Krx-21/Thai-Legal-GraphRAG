@@ -1,0 +1,112 @@
+[
+  {
+    "strategy": "TF-IDF",
+    "n": 50,
+    "hit_rate": 0.86,
+    "mrr": 0.4080217761674379,
+    "recall_at_10": 0.6,
+    "precision_at_10": 0.06,
+    "recall_at_20": 0.66,
+    "cit_macro_f1": 0.1090909090909091,
+    "avg_latency": 0.006176095008850097
+  },
+  {
+    "strategy": "TF-IDF + [แพ่ง]",
+    "n": 50,
+    "hit_rate": 0.86,
+    "mrr": 0.4125168445384103,
+    "recall_at_10": 0.6,
+    "precision_at_10": 0.06,
+    "recall_at_20": 0.68,
+    "cit_macro_f1": 0.1090909090909091,
+    "avg_latency": 0.0057634878158569335
+  },
+  {
+    "strategy": "BM25",
+    "n": 50,
+    "hit_rate": 0.9,
+    "mrr": 0.5320619796869797,
+    "recall_at_10": 0.82,
+    "precision_at_10": 0.08200000000000002,
+    "recall_at_20": 0.84,
+    "cit_macro_f1": 0.1490909090909091,
+    "avg_latency": 0.01047457218170166
+  },
+  {
+    "strategy": "BM25 + [แพ่ง]",
+    "n": 50,
+    "hit_rate": 0.9,
+    "mrr": 0.540885007712594,
+    "recall_at_10": 0.84,
+    "precision_at_10": 0.084,
+    "recall_at_20": 0.84,
+    "cit_macro_f1": 0.15272727272727274,
+    "avg_latency": 0.010317487716674805
+  },
+  {
+    "strategy": "Dense (MiniLM)",
+    "n": 50,
+    "hit_rate": 0.88,
+    "mrr": 0.4612442245909494,
+    "recall_at_10": 0.66,
+    "precision_at_10": 0.066,
+    "recall_at_20": 0.7,
+    "cit_macro_f1": 0.12,
+    "avg_latency": 0.019878149032592773
+  },
+  {
+    "strategy": "Dense + [แพ่ง]",
+    "n": 50,
+    "hit_rate": 0.88,
+    "mrr": 0.46424070998960865,
+    "recall_at_10": 0.66,
+    "precision_at_10": 0.066,
+    "recall_at_20": 0.72,
+    "cit_macro_f1": 0.12,
+    "avg_latency": 0.018411221504211425
+  },
+  {
+    "strategy": "TF-IDF+BM25 RRF",
+    "n": 50,
+    "hit_rate": 0.94,
+    "mrr": 0.4906458801542385,
+    "recall_at_10": 0.72,
+    "precision_at_10": 0.07200000000000001,
+    "recall_at_20": 0.78,
+    "cit_macro_f1": 0.13090909090909092,
+    "avg_latency": 0.018085064888000487
+  },
+  {
+    "strategy": "TF-IDF+BM25 + [แพ่ง]",
+    "n": 50,
+    "hit_rate": 0.94,
+    "mrr": 0.4918512155919892,
+    "recall_at_10": 0.72,
+    "precision_at_10": 0.07200000000000001,
+    "recall_at_20": 0.8,
+    "cit_macro_f1": 0.13090909090909092,
+    "avg_latency": 0.017363886833190918
+  },
+  {
+    "strategy": "Dense+BM25 RRF",
+    "n": 50,
+    "hit_rate": 0.92,
+    "mrr": 0.5883670662382953,
+    "recall_at_10": 0.74,
+    "precision_at_10": 0.07400000000000001,
+    "recall_at_20": 0.84,
+    "cit_macro_f1": 0.13454545454545455,
+    "avg_latency": 0.030659823417663573
+  },
+  {
+    "strategy": "Dense+BM25 + [แพ่ง]",
+    "n": 50,
+    "hit_rate": 0.92,
+    "mrr": 0.5884632698511314,
+    "recall_at_10": 0.74,
+    "precision_at_10": 0.07400000000000001,
+    "recall_at_20": 0.84,
+    "cit_macro_f1": 0.13454545454545455,
+    "avg_latency": 0.030319099426269532
+  }
+]

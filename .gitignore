@@ -1,0 +1,39 @@
+﻿# ── Python ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# ── Virtual environment ────────────────────────
+.venv/
+venv/
+env/
+
+# ── Environment variables (NEVER commit secrets) ──
+.env
+*.env
+!.env.example
+
+# ── IDE / OS ───────────────────────────────────
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# ── Generated retrieval caches ─────────────────
+# Note: by user choice we DO commit output/ (KG, qa, results) so the repo
+# can be cloned & queried without re-indexing. The dense_mat_*.npy cache is
+# regenerable but kept for convenience.
+
+# ── Dev / debug scratch ────────────────────────
+scripts/dev/
+*-Kx_NB*
+*.bak
+kfold_log.txt
+
+# ── Streamlit / pyvis temp ─────────────────────
+.streamlit/secrets.toml
+*.html
