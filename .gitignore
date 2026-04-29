@@ -36,3 +36,4 @@ kfold_log.txt
 # ── Streamlit / pyvis temp ─────────────────────
 .streamlit/secrets.toml
 *.html
+lib/

@@ -1,5 +1,9 @@
 # Thai Legal GraphRAG
 
+[![Python](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-16%2F16%20passing-brightgreen.svg)](tests/)
+
 ระบบถาม-ตอบกฎหมายไทยโดยใช้ **Graph-based Retrieval-Augmented Generation (GraphRAG)** พร้อม Knowledge Graph บน Neo4j
 
 ## Architecture
