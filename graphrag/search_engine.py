@@ -62,13 +62,53 @@ class _RetrievalIndex:
         self.item_types: list[str] = []   # 'entity' | 'chunk'
         self.texts: list[str] = []
 
+        # Helper: pull full statute text for a SECTION entity from its source chunks.
+        # Section descriptions are short regex stubs — using them for dense
+        # retrieval makes every section in a chapter look identical, which is the
+        # main reason RRF returns the wrong neighbourhood (e.g. ม.330 instead of
+        # ม.849). Indexing the actual statute text gives each section its own vector.
+        _SEC_HDR = re.compile(
+            r"มาตรา\s*([\d๐-๙]+(?:/[\d๐-๙]+)?)"
+        )
+        _TO_AR = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
+
+        def _resolve_section_text(ent) -> str:
+            m = _SEC_HDR.search(ent.name)
+            if not m:
+                return ent.description or ""
+            own = m.group(1).translate(_TO_AR)
+            for cid in ent.source_chunk_ids:
+                chunk = kg.text_chunks.get(cid)
+                if not chunk or not chunk.text:
+                    continue
+                start = None
+                for hm in _SEC_HDR.finditer(chunk.text):
+                    if hm.group(1).translate(_TO_AR) == own:
+                        start = hm.start()
+                        break
+                if start is None:
+                    continue
+                end = len(chunk.text)
+                for hm in _SEC_HDR.finditer(chunk.text, start + 4):
+                    if hm.group(1).translate(_TO_AR) != own:
+                        end = hm.start()
+                        break
+                snippet = chunk.text[start:end].strip()
+                if snippet:
+                    return snippet[:1500]
+            return ent.description or ""
+
         # Index entities
         for name, ent in kg.entities.items():
             self.names.append(name)
             self.item_types.append("entity")
-            self.texts.append(
-                f"{ent.entity_type}: {name} - {ent.description}"
-            )
+            if ent.entity_type == "SECTION":
+                body = _resolve_section_text(ent)
+                self.texts.append(f"SECTION: {name}\n{body}")
+            else:
+                self.texts.append(
+                    f"{ent.entity_type}: {name} - {ent.description}"
+                )
 
         # Index text chunks (full section text for better recall)
         self._chunk_section_map: dict[str, list[str]] = {}  # chunk_id → entity names
@@ -186,13 +226,233 @@ class _RetrievalIndex:
     # ── public query ─────────────────────────────────────────────────
 
     def search(self, query: str, top_k: int = 20) -> list[tuple[str, float, str]]:
-        """RRF fusion of TF-IDF + BM25 + Dense.  Returns [(name, rrf_score, item_type)]."""
+        """RRF fusion of TF-IDF + BM25 + Dense, optionally re-ranked by dense sim.
+
+        Returns [(name, rrf_score, item_type)].
+
+        With section embeddings now keyed on full statute text, a second-stage
+        dense rerank over the fused candidate pool corrects cases where TF-IDF
+        and BM25 (which match on section names + body) drag in lexically similar
+        but semantically wrong sections. RRF rank and dense similarity are
+        combined as a weighted sum on normalised scales.
+        """
+        import os
         fetch = top_k * 10  # fetch more for fusion
         tfidf_r = self._q_tfidf(query, fetch)
         bm25_r = self._q_bm25(query, fetch)
         dense_r = self._q_dense(query, fetch)
         fused = self._rrf([tfidf_r, bm25_r, dense_r])
-        return [(self.names[i], s, self.item_types[i]) for i, s in fused[:top_k * 5]]
+
+        if os.getenv("GRAPHRAG_DISABLE_RERANK"):
+            return [(self.names[i], s, self.item_types[i]) for i, s in fused[:top_k * 5]]
+
+        # ── 2-stage rerank ──
+        # Cap candidate pool, then blend RRF rank with raw dense similarity
+        # against the full indexed text. Weight is tunable via env.
+        pool_n = min(len(fused), max(top_k * 10, 100))
+        pool = fused[:pool_n]
+        if not pool:
+            return []
+        try:
+            alpha = float(os.getenv("GRAPHRAG_RERANK_ALPHA", "0.4"))
+        except ValueError:
+            alpha = 0.4
+        alpha = min(max(alpha, 0.0), 1.0)
+
+        # Dense similarity for pool members (use cached self.dense_mat rows)
+        v = self.dense_model.encode(
+            [query], normalize_embeddings=True
+        ).astype(np.float32)
+        idx_arr = np.array([i for i, _ in pool], dtype=np.int64)
+        sub_mat = self.dense_mat[idx_arr]
+        d_sims = (sub_mat @ v[0]).astype(np.float32)  # cosine: rows already L2-normalised
+
+        # Normalise RRF scores in pool to [0,1]
+        rrf_scores = np.array([s for _, s in pool], dtype=np.float32)
+        r_min, r_max = float(rrf_scores.min()), float(rrf_scores.max())
+        rrf_norm = (rrf_scores - r_min) / (r_max - r_min + 1e-9)
+
+        # Normalise dense sims to [0,1] within pool
+        d_min, d_max = float(d_sims.min()), float(d_sims.max())
+        d_norm = (d_sims - d_min) / (d_max - d_min + 1e-9)
+
+        final = (1.0 - alpha) * rrf_norm + alpha * d_norm
+        order = np.argsort(-final)
+
+        # ── HyDE-lite for dense: refine d_norm using augmented query ──
+        # Take top-K of stage-2 as pseudo-context, encode (q + ctx), recompute
+        # dense sims over the same pool, blend back into `final`. Keeps CE input
+        # untouched (which we found pollutes CE) but gives the dense channel a
+        # second chance to break adjacent-section ties.
+        try:
+            hyde_dk = int(os.getenv("GRAPHRAG_HYDE_DENSE_K", "0"))
+        except ValueError:
+            hyde_dk = 0
+        if hyde_dk > 0 and len(order) >= hyde_dk:
+            try:
+                hyde_dchars = int(os.getenv("GRAPHRAG_HYDE_DENSE_CHARS", "300"))
+            except ValueError:
+                hyde_dchars = 300
+            try:
+                hyde_dw = float(os.getenv("GRAPHRAG_HYDE_DENSE_W", "0.3"))
+            except ValueError:
+                hyde_dw = 0.3
+            parts = [query]
+            for k in order[:hyde_dk]:
+                t = self.texts[int(idx_arr[k])]
+                nl = t.find("\n")
+                body = t[nl + 1:] if nl >= 0 else t
+                parts.append(body[:hyde_dchars])
+            aug_q = " ".join(parts)
+            v2 = self.dense_model.encode(
+                [aug_q], normalize_embeddings=True
+            ).astype(np.float32)
+            d2 = (sub_mat @ v2[0]).astype(np.float32)
+            d2_min, d2_max = float(d2.min()), float(d2.max())
+            d2_norm = (d2 - d2_min) / (d2_max - d2_min + 1e-9)
+            final = (1.0 - hyde_dw) * final + hyde_dw * d2_norm
+            order = np.argsort(-final)
+
+        # ── Optional 3rd stage: cross-encoder rerank on the top of stage-2 ──
+        # Cross-encoders score (query, doc) jointly and typically beat bi-encoder
+        # cosine by 3–8 pp hit@1 on retrieval benchmarks. Enabled via env flag
+        # because it loads a ~110 MB model and adds ~100–500 ms / query on CPU.
+        ce_top = 0
+        ce_env = os.getenv("GRAPHRAG_CE_TOPN")
+        if ce_env:
+            try:
+                ce_top = int(ce_env)
+            except ValueError:
+                ce_top = 0
+
+        if ce_top > 0:
+            ce_top = min(ce_top, len(order))
+            ce_model = self._get_cross_encoder()
+            if ce_model is not None:
+                head = order[:ce_top]
+                try:
+                    ce_doc_chars = int(os.getenv("GRAPHRAG_CE_DOC_CHARS", "1500"))
+                except ValueError:
+                    ce_doc_chars = 1500
+                # ── HyDE-lite: augment query with top-K retrieved bodies ──
+                # The top-1..K of stage-2 act as a "pseudo answer" that disambiguates
+                # adjacent sections — a CE judging (q+context, candidate) is less
+                # likely to confuse ม.1379 vs ม.1380 because the augmentation
+                # carries the topical fingerprint of the right neighborhood.
+                try:
+                    hyde_k = int(os.getenv("GRAPHRAG_HYDE_K", "0"))
+                except ValueError:
+                    hyde_k = 0
+                if hyde_k > 0:
+                    try:
+                        hyde_chars = int(os.getenv("GRAPHRAG_HYDE_CHARS", "300"))
+                    except ValueError:
+                        hyde_chars = 300
+                    aug_parts = [query]
+                    for k in order[:hyde_k]:
+                        t = self.texts[int(idx_arr[k])]
+                        nl = t.find("\n")
+                        body = t[nl + 1:] if nl >= 0 else t
+                        aug_parts.append(body[:hyde_chars])
+                    ce_query = " ".join(aug_parts)
+                else:
+                    ce_query = query
+                pairs = [
+                    (ce_query, self.texts[int(idx_arr[k])][:ce_doc_chars])
+                    for k in head
+                ]
+                ce_scores = ce_model.predict(pairs, show_progress_bar=False)
+                ce_arr = np.asarray(ce_scores, dtype=np.float32)
+                # Normalise cross-encoder scores within head to [0,1]
+                cmin, cmax = float(ce_arr.min()), float(ce_arr.max())
+                ce_norm = (ce_arr - cmin) / (cmax - cmin + 1e-9)
+                # Specificity prior: sections with very short statute bodies are
+                # general/intro clauses (e.g. ม.7) that lexically match many queries.
+                # Penalise them so longer, more topic-specific provisions win.
+                try:
+                    spec_w = float(os.getenv("GRAPHRAG_SPEC_WEIGHT", "0.0"))
+                except ValueError:
+                    spec_w = 0.0
+                if spec_w > 0:
+                    spec = np.zeros(len(head), dtype=np.float32)
+                    for i, k in enumerate(head):
+                        t = self.texts[int(idx_arr[k])]
+                        # body len after the "SECTION: <name>\n" header
+                        nl = t.find("\n")
+                        body_len = len(t) - (nl + 1) if nl >= 0 else len(t)
+                        # logistic-ish: short → ~0, long → ~1, threshold 300 chars
+                        spec[i] = 1.0 / (1.0 + np.exp(-(body_len - 300) / 150.0))
+                    ce_norm = (1.0 - spec_w) * ce_norm + spec_w * spec
+                # Blend: cross-encoder dominates with weight beta (default 0.7)
+                try:
+                    beta = float(os.getenv("GRAPHRAG_CE_BETA", "0.7"))
+                except ValueError:
+                    beta = 0.7
+                beta = min(max(beta, 0.0), 1.0)
+                head_final = (1.0 - beta) * final[head] + beta * ce_norm
+                # Reorder the head by new scores; tail keeps its original order
+                head_order = head[np.argsort(-head_final)]
+                order = np.concatenate([head_order, order[ce_top:]])
+                # Update final scores for the head positions so the returned
+                # tuple's score reflects the reranked value
+                new_final = final.copy()
+                for rank_in_head, k in enumerate(head):
+                    new_final[k] = float(head_final[np.where(head == k)[0][0]])
+                final = new_final
+
+        return [
+            (self.names[idx_arr[k]], float(final[k]), self.item_types[idx_arr[k]])
+            for k in order[: top_k * 5]
+        ]
+
+    # ── Cross-encoder lazy loader ────────────────────────────────────
+    _ce_model = None
+    _ce_models = None  # list of CrossEncoders for ensemble
+    _ce_failed = False
+
+    def _get_cross_encoder(self):
+        if self._ce_failed:
+            return None
+        if self._ce_model is not None:
+            return self._ce_model
+        import os
+        # Ensemble: GRAPHRAG_CE_MODELS=name1,name2 (comma-separated)
+        ensemble_env = os.getenv("GRAPHRAG_CE_MODELS", "").strip()
+        names = [n.strip() for n in ensemble_env.split(",") if n.strip()] if ensemble_env else []
+        if not names:
+            names = [os.getenv(
+                "GRAPHRAG_CE_MODEL",
+                "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+            )]
+        try:
+            from sentence_transformers import CrossEncoder
+            models = []
+            for nm in names:
+                print(f"[Search] Loading cross-encoder: {nm}")
+                models.append(CrossEncoder(nm, max_length=512))
+            self._ce_models = models
+            self._ce_model = _CEEnsemble(models) if len(models) > 1 else models[0]
+            return self._ce_model
+        except Exception as e:
+            print(f"[Search] CrossEncoder load failed: {e!r}")
+            self._ce_failed = True
+            return None
+
+
+class _CEEnsemble:
+    """Average-normalised score across multiple CrossEncoders."""
+    def __init__(self, models: list):
+        self.models = models
+
+    def predict(self, pairs, show_progress_bar: bool = False):
+        import numpy as _np
+        scores = []
+        for m in self.models:
+            s = _np.asarray(m.predict(pairs, show_progress_bar=False), dtype=_np.float32)
+            # min-max normalise per model so different score ranges combine fairly
+            lo, hi = float(s.min()), float(s.max())
+            scores.append((s - lo) / (hi - lo + 1e-9))
+        return _np.mean(_np.stack(scores, axis=0), axis=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════

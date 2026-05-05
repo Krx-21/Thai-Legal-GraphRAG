@@ -101,7 +101,7 @@ def _select_top_sections(sections: list[dict], max_sections: int | None = None) 
     """Select only the sections that are *clearly* relevant.
 
     Tunable via env vars (for eval sweeps):
-      GRAPHRAG_MAX_SECTIONS   (int,   default 3)
+      GRAPHRAG_MAX_SECTIONS   (int,   default 2)
       GRAPHRAG_REL_FLOOR      (float, default 0.55)  ratio of top_score
       GRAPHRAG_GAP_THRESHOLD  (float, default 0.15)  absolute decisive gap
 
@@ -113,7 +113,7 @@ def _select_top_sections(sections: list[dict], max_sections: int | None = None) 
     """
     import os
     if max_sections is None:
-        max_sections = int(os.getenv("GRAPHRAG_MAX_SECTIONS", "3"))
+        max_sections = int(os.getenv("GRAPHRAG_MAX_SECTIONS", "2"))
     rel_floor_ratio = float(os.getenv("GRAPHRAG_REL_FLOOR", "0.55"))
     gap_threshold = float(os.getenv("GRAPHRAG_GAP_THRESHOLD", "0.15"))
 

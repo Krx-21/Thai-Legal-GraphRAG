@@ -1,0 +1,85 @@
+﻿.venv\Scripts\python.exe : Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN 
+to enable higher rate limits and faster downloads.
+At line:1 char:270
++ ... $b =====" ; .venv\Scripts\python.exe -W ignore -m eval.eval_nitibench ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Warning: You ar...ster downloads.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+============================================================
+  NitiBench-CCL Evaluation
+============================================================
+
+[1] Loading NitiBench-CCL (เธเธฃเธฐเธกเธงเธฅเธเธเธซเธกเธฒเธขเนเธเนเธเนเธฅเธฐเธเธฒเธ“เธดเธเธขเน) ...
+    Loaded 200 items
+
+[2] Loading knowledge graph ...
+[GraphBuilder] Loaded from parquet: 3000 entities, 7382 relationships, 30 communities
+[GraphBuilder] Embedding 3000 entities โ€ฆ
+[GraphBuilder] TF-IDF embeddings done (dim=512)
+
+============================================================
+  Mode: local
+============================================================
+
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]
+Loading weights: 100%|โ–โ–โ–โ–โ–โ–โ–โ–โ–โ–| 199/199 [00:00<00:00, 6361.93it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+[Search] Loading cross-encoder: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]
+Loading weights: 100%|โ–โ–โ–โ–โ–โ–โ–โ–โ–โ–| 201/201 [00:00<00:00, 6221.72it/s]
+[1mXLMRobertaForSequenceClassification LOAD REPORT[0m from: cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+Key                             | Status     |  | 
+--------------------------------+------------+--+-
+roberta.embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  [!] Gemini credits depleted -- falling back to no-LLM mode
+  [10/200] hit=1.000 ret_recall=1.000 cit_f1=0.900
+  [20/200] hit=0.900 ret_recall=0.900 cit_f1=0.650
+  [30/200] hit=0.800 ret_recall=0.800 cit_f1=0.600
+  [40/200] hit=0.775 ret_recall=0.775 cit_f1=0.600
+  [50/200] hit=0.780 ret_recall=0.780 cit_f1=0.600
+  [60/200] hit=0.733 ret_recall=0.733 cit_f1=0.533
+  [70/200] hit=0.729 ret_recall=0.729 cit_f1=0.500
+  [80/200] hit=0.750 ret_recall=0.750 cit_f1=0.512
+  [90/200] hit=0.756 ret_recall=0.756 cit_f1=0.533
+  [100/200] hit=0.750 ret_recall=0.750 cit_f1=0.520
+  [110/200] hit=0.773 ret_recall=0.773 cit_f1=0.536
+  [120/200] hit=0.783 ret_recall=0.783 cit_f1=0.542
+  [130/200] hit=0.792 ret_recall=0.792 cit_f1=0.554
+  [140/200] hit=0.800 ret_recall=0.800 cit_f1=0.543
+  [150/200] hit=0.813 ret_recall=0.813 cit_f1=0.547
+  [160/200] hit=0.825 ret_recall=0.825 cit_f1=0.562
+  [170/200] hit=0.824 ret_recall=0.824 cit_f1=0.559
+  [180/200] hit=0.822 ret_recall=0.822 cit_f1=0.544
+  [190/200] hit=0.816 ret_recall=0.816 cit_f1=0.542
+  [200/200] hit=0.805 ret_recall=0.805 cit_f1=0.525
+
+  [local] NitiBench Metrics:
+                                 n: 200
+                retrieval_hit_rate: 0.8050
+                     retrieval_mrr: 0.6314
+                  retrieval_recall: 0.8050
+         retrieval_micro_precision: 0.0452
+            retrieval_micro_recall: 0.8050
+                retrieval_micro_f1: 0.0856
+          citation_micro_precision: 0.5615
+             citation_micro_recall: 0.5250
+                 citation_micro_f1: 0.5426
+          citation_macro_precision: 0.5250
+             citation_macro_recall: 0.5250
+                 citation_macro_f1: 0.5250
+                      faithfulness: 0.1139
+                  answer_relevancy: 0.0133
+                       avg_latency: 0.6955
+
+[Saved] 200 results -> output\results\v6_b10_200.json

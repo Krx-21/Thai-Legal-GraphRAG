@@ -1,12 +1,20 @@
-# Core
-openai>=1.30.0
+# Core LLM
+google-genai>=1.0.0
+
+# Graph Database (optional – for export-neo4j command)
 neo4j>=5.19.0
+
+# Thai NLP
 pythainlp>=5.0.0
 
 # GraphRAG / Graph
 networkx>=3.2
-python-louvain>=0.16
-graspologic>=3.3.0
+igraph>=1.0.0
+leidenalg>=0.10.0
+
+# Retrieval
+rank-bm25>=0.2.2
+sentence-transformers>=2.2.0
 
 # Embeddings & Vector
 numpy>=1.26.0
@@ -20,8 +28,8 @@ pyarrow>=15.0.0
 streamlit>=1.35.0
 pyvis>=0.3.2
 
-# Evaluation
-ragas>=0.1.10
+# Evaluation (NitiBench adapter)
+datasets>=2.0.0
 
 # Utilities
 tiktoken>=0.7.0

@@ -116,21 +116,33 @@ def extract_gt_sections(item: NitiBenchItem) -> list[str]:
 
 
 def extract_predicted_sections(answer_text: str, entities: list[dict],
-                               law_prefix: str | None = None) -> list[str]:
+                               law_prefix: str | None = None,
+                               top_k: int | None = 20) -> list[str]:
     """Extract predicted section numbers from entities (for retrieval metrics).
 
-    Uses all entity names to find section numbers — this reflects what
-    the search engine actually retrieved (broader recall).
+    Ranks SECTION entities by score and returns top-K section numbers from
+    the matching law. Excludes 1-hop graph-neighbour entities (which inflate
+    the list to thousands) by ranking on score.
 
     If law_prefix is given (e.g. "[แพ่ง]"), only entities with that
-    prefix in their name are considered.
+    prefix in their name are considered. If top_k is None, all are returned.
     """
-    sections = []
+    # Filter to SECTION entities of the target law, sort by score desc
+    sec_ents = []
     for ent in entities:
         name = ent.get("name", "")
         if law_prefix and law_prefix not in name:
             continue
-        m = _SEC_PAT.search(name)
+        if not _SEC_PAT.search(name):
+            continue
+        sec_ents.append(ent)
+    sec_ents.sort(key=lambda e: e.get("score", 0) or 0.0, reverse=True)
+    if top_k is not None:
+        sec_ents = sec_ents[:top_k]
+
+    sections = []
+    for ent in sec_ents:
+        m = _SEC_PAT.search(ent.get("name", ""))
         if m:
             sections.append(_normalize_sec(m.group(1)))
     return list(dict.fromkeys(sections))  # preserve order, deduplicate
@@ -140,25 +152,37 @@ def extract_cited_sections(answer_text: str,
                            law_prefix: str | None = None) -> list[str]:
     """Extract sections from the citation line (for citation metrics).
 
-    Only looks at 'มาตราที่เกี่ยวข้อง:' line — this is what the system
-    explicitly cites as relevant (narrower precision focus).
-
-    If law_prefix is given, also scan answer for entity lines with that
-    prefix and extract section numbers from those.
+    Looks at the 'มาตราที่เกี่ยวข้อง:' line first (the system's explicit
+    citation list). If law_prefix is given, sections are accepted only if
+    the body of the answer contains a `[law_prefix] มาตรา X` reference for
+    that section number, ensuring we only count citations from the target law.
     """
-    # Try citation line first
+    # Build set of section numbers that appear in the body with the target prefix
+    body_sections: set[str] | None = None
+    if law_prefix:
+        body_sections = set()
+        for m in re.finditer(
+            re.escape(law_prefix) + r"\s*มาตรา\s*([\d๐-๙]+(?:/[\d๐-๙]+)?)",
+            answer_text,
+        ):
+            body_sections.add(_normalize_sec(m.group(1)))
+
+    # Try citation line
     for line in answer_text.split("\n"):
         if "มาตราที่เกี่ยวข้อง" in line:
-            if not law_prefix:
-                raw = re.findall(r"(\d+(?:/\d+)?)", line)
-                return list(set(_normalize_sec(s) for s in raw))
-            # With law filter: need to check which cited sections come from
-            # the right law. Parse SECTION lines to build a mapping.
-            break
+            raw = re.findall(r"(\d+(?:/\d+)?)", line)
+            cites = [_normalize_sec(s) for s in raw]
+            if body_sections is not None:
+                cites = [s for s in cites if s in body_sections]
+            return list(dict.fromkeys(cites))
 
+    # Fallback: use only sections referenced in body with target prefix
+    if body_sections:
+        return list(body_sections)
+
+    # Legacy format fallback: [SECTION] lines
     if law_prefix:
-        # Extract sections from [SECTION] lines that match the law prefix
-        sections = []
+        sections: list[str] = []
         for line in answer_text.split("\n"):
             if "[SECTION]" in line and law_prefix in line:
                 m = _SEC_PAT.search(line)
@@ -412,7 +436,7 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump([asdict(r) for r in all_results], f, ensure_ascii=False, indent=2)
-    print(f"\n[Saved] {len(all_results)} results → {out_path}")
+    print(f"\n[Saved] {len(all_results)} results -> {out_path}")
 
     # Overall summary
     if len(modes) > 1:
